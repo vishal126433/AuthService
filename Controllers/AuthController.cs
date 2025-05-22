@@ -7,6 +7,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Microsoft.EntityFrameworkCore;
 
 [ApiController]
 [Route("[controller]")]
@@ -24,6 +25,16 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
     {
+        // Check if username or email already exists
+        var existingUser = await _db.Users
+            .FirstOrDefaultAsync(u => u.Username == req.Username || u.Email == req.Email);
+
+        if (existingUser != null)
+        {
+            return BadRequest("Username or Email already exists");
+        }
+
+        // Proceed to register the user
         var user = new User
         {
             Username = req.Username,
@@ -33,8 +44,10 @@ public class AuthController : ControllerBase
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
+
         return Ok("User Registered Successfully");
     }
+
 
     [HttpPost("login")]
     public IActionResult Login(LoginRequest req)
