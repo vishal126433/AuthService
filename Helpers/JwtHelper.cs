@@ -64,7 +64,9 @@ public static class JwtHelper
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddDays(7), // Longer expiration for refresh token
+            expires: DateTime.UtcNow.AddMinutes(30),
+
+            //expires: DateTime.UtcNow.AddDays(7), // Longer expiration for refresh token
             signingCredentials: creds
         );
 

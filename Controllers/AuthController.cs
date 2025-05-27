@@ -8,6 +8,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using AuthService.Helpers; 
 
 [ApiController]
 [Route("[controller]")]
@@ -25,16 +26,12 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
     {
-        // Check if username or email already exists
         var existingUser = await _db.Users
             .FirstOrDefaultAsync(u => u.Username == req.Username || u.Email == req.Email);
 
         if (existingUser != null)
-        {
             return BadRequest("Username or Email already exists");
-        }
 
-        // Proceed to register the user
         var user = new User
         {
             Username = req.Username,
@@ -48,7 +45,6 @@ public class AuthController : ControllerBase
         return Ok("User Registered Successfully");
     }
 
-
     [HttpPost("login")]
     public IActionResult Login(LoginRequest req)
     {
@@ -60,21 +56,14 @@ public class AuthController : ControllerBase
         var accessToken = JwtHelper.GenerateAccessToken(user, _config);
         var refreshToken = JwtHelper.GenerateRefreshToken(user, _config);
 
-        // Set refresh token as HttpOnly cookie
-        Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Expires = DateTime.UtcNow.AddDays(7)
-        });
+        CookieHelper.AppendRefreshToken(Response, refreshToken); //  Moved to helper
 
         return Ok(new TokenResponse
         {
             AccessToken = accessToken,
-            Role = user.Role
         });
     }
+
     [HttpPost("refresh-token")]
     public IActionResult RefreshToken()
     {
@@ -107,17 +96,6 @@ public class AuthController : ControllerBase
                 return Unauthorized("User not found");
 
             var newAccessToken = JwtHelper.GenerateAccessToken(user, _config);
-            var newRefreshToken = JwtHelper.GenerateRefreshToken(user, _config);
-
-            // Replace cookie
-            Response.Cookies.Append("refreshToken", newRefreshToken, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddDays(7)
-            });
-
             return Ok(new TokenResponse { AccessToken = newAccessToken });
         }
         catch
@@ -126,30 +104,10 @@ public class AuthController : ControllerBase
         }
     }
 
-
-
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        Response.Cookies.Delete("refreshToken", new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = true,
-            SameSite = SameSiteMode.None,
-            Path = "/"
-        });
-
+        CookieHelper.DeleteRefreshToken(Response); //  Moved to helper
         return Ok("Logged out successfully");
     }
-
-
-
-
-
-
-
-
-
-
-
 }
