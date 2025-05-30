@@ -12,8 +12,13 @@ namespace AuthService.Helpers
                 HttpOnly = true,
                 Secure = true,
                 SameSite = SameSiteMode.None,
-                Expires = DateTime.UtcNow.AddMinutes(30)
+                Expires = DateTime.UtcNow.AddMinutes(30),
+                Path = "/"
             });
+
+
+
+
         }
 
         public static void DeleteRefreshToken(HttpResponse response)
