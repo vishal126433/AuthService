@@ -8,7 +8,8 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
-using AuthService.Helpers; 
+using AuthService.Helpers;
+using Microsoft.AspNetCore.Identity;
 
 [ApiController]
 [Route("[controller]")]
@@ -35,9 +36,11 @@ public class AuthController : ControllerBase
         var user = new User
         {
             Username = req.Username,
-            Email = req.Email,
-            PasswordHash = req.Password
+            Email = req.Email
         };
+
+        var passwordHasher = new PasswordHasher<User>();
+        user.PasswordHash = passwordHasher.HashPassword(user, req.Password);
 
         _db.Users.Add(user);
         await _db.SaveChangesAsync();
@@ -45,24 +48,31 @@ public class AuthController : ControllerBase
         return Ok("User Registered Successfully");
     }
 
+
     [HttpPost("login")]
     public IActionResult Login(LoginRequest req)
     {
         var user = _db.Users.FirstOrDefault(u => u.Email == req.Email);
+        if (user == null)
+            return Unauthorized("Invalid credentials");
 
-        if (user == null || user.PasswordHash != req.Password)
+        var passwordHasher = new PasswordHasher<User>();
+        var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
+
+        if (result == PasswordVerificationResult.Failed)
             return Unauthorized("Invalid credentials");
 
         var accessToken = JwtHelper.GenerateAccessToken(user, _config);
         var refreshToken = JwtHelper.GenerateRefreshToken(user, _config);
 
-        CookieHelper.AppendRefreshToken(Response, refreshToken); //  Moved to helper
+        CookieHelper.AppendRefreshToken(Response, refreshToken);
 
         return Ok(new TokenResponse
         {
             AccessToken = accessToken,
         });
     }
+
 
     [HttpPost("refresh-token")]
     public IActionResult RefreshToken()
