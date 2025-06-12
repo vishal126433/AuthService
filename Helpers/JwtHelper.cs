@@ -6,17 +6,20 @@ using System.IdentityModel.Tokens.Jwt;
 
 public static class JwtHelper
 {
+
     public static string GenerateAccessToken(User user, IConfiguration config)
     {
         if (user == null)
             throw new ArgumentNullException(nameof(user), "User cannot be null");
 
-        var claims = new[]
-        {
-            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new Claim(ClaimTypes.Name, user.Username),
-            new Claim(ClaimTypes.Role, user.Role ?? "User")
-        };
+        string roleName = string.IsNullOrWhiteSpace(user.Role) ? "User" : user.Role;
+
+        var claims = new List<Claim>
+    {
+        new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+        new Claim(ClaimTypes.Name, user.Username),
+        new Claim(ClaimTypes.Role, roleName) // This will be used by [Authorize(Roles = "Admin")]
+    };
 
         var secretKey = config["JwtSettings:SecretKey"];
         var issuer = config["JwtSettings:Issuer"];
@@ -32,12 +35,14 @@ public static class JwtHelper
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(2),
+            expires: DateTime.UtcNow.AddMinutes(30), // Use a slightly longer expiry for testing
             signingCredentials: creds
         );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
+
+
 
     public static string GenerateRefreshToken(User user, IConfiguration config)
     {

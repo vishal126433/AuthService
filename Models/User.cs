@@ -9,8 +9,7 @@ namespace AuthService.Models
         public string Email { get; set; }
         [MaxLength(100)]
         public string PasswordHash { get; set; }
-        public string Role { get; set; } = "User"; // default role
-        //public string? RefreshToken { get; set; }
-        //public DateTime? RefreshTokenExpiryTime { get; set; }
+        public string Role { get; set; } = "User";
+        
     }
 }
