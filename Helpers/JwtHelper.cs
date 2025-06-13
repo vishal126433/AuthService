@@ -32,8 +32,8 @@ public static class JwtHelper
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-            issuer: issuer,
-            audience: audience,
+           issuer: config["JwtSettings:Issuer"],
+           audience: config["JwtSettings:Audience"],
             claims: claims,
             expires: DateTime.UtcNow.AddMinutes(30), // Use a slightly longer expiry for testing
             signingCredentials: creds

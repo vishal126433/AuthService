@@ -7,6 +7,7 @@ using AuthService.Data;
 using System;
 using System.Security.Claims;
 using Microsoft.OpenApi.Models;
+Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,7 +46,7 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
 
-builder.Services.AddAuthorization();
+
 
 // Add CORS policy
 builder.Services.AddCors(options =>
@@ -75,17 +76,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-
+            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
+            ValidAudience = builder.Configuration["JwtSettings:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(jwtSettings["SecretKey"] ?? throw new InvalidOperationException("SecretKey is missing"))
+                Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"])
+            //Convert.FromBase64String(jwtSettings["SecretKey"] ?? throw new InvalidOperationException("SecretKey is missing"))
             ),
             //RoleClaimType = ClaimTypes.Role
 
         };
     });
-
+builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Enable CORS
