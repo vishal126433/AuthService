@@ -21,6 +21,9 @@ public static class JwtHelper
         new Claim(ClaimTypes.Role, roleName) // This will be used by [Authorize(Roles = "Admin")]
     };
 
+    
+
+
         var secretKey = config["JwtSettings:SecretKey"];
         var issuer = config["JwtSettings:Issuer"];
         var audience = config["JwtSettings:Audience"];
