@@ -30,13 +30,12 @@ public static class JwtHelper
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var now = DateTime.UtcNow;
 
         var token = new JwtSecurityToken(
            issuer: config["JwtSettings:Issuer"],
            audience: config["JwtSettings:Audience"],
             claims: claims,
-            expires: now.AddMinutes(30), // Use a slightly longer expiry for testing
+            expires: DateTime.UtcNow.AddMinutes(30), // Use a slightly longer expiry for testing
             signingCredentials: creds
         );
 
@@ -70,7 +69,7 @@ public static class JwtHelper
             issuer: issuer,
             audience: audience,
             claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(60),
+            expires: DateTime.UtcNow.AddMinutes(30),
 
             signingCredentials: creds
         );
