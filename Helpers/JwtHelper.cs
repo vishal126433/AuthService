@@ -14,7 +14,7 @@ public static class JwtHelper
 
         string roleName = string.IsNullOrWhiteSpace(user.Role) ? "User" : user.Role;
 
-        var claims = new List<Claim>
+        var authClaims = new List<Claim>
     {
         new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
         new Claim(ClaimTypes.Name, user.Username),
@@ -35,12 +35,12 @@ public static class JwtHelper
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
-           issuer: config["JwtSettings:Issuer"],
-           audience: config["JwtSettings:Audience"],
-            claims: claims,
-            expires: DateTime.UtcNow.AddMinutes(30), // Use a slightly longer expiry for testing
-            signingCredentials: creds
-        );
+    issuer: issuer,
+    audience: audience,
+    claims: authClaims,
+    expires: DateTime.UtcNow.AddMinutes(30),
+    signingCredentials: creds
+ );
 
         return new JwtSecurityTokenHandler().WriteToken(token);
     }

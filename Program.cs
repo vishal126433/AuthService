@@ -7,7 +7,9 @@ using AuthService.Data;
 using System;
 using System.Security.Claims;
 using Microsoft.OpenApi.Models;
-Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
+using System.IdentityModel.Tokens.Jwt;
+
+//Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -51,7 +53,7 @@ builder.Services.AddDbContext<AuthDbContext>(options =>
 // Add CORS policy
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowAngularApp", policy =>
+    options.AddPolicy("AngularApp", policy =>
     {
         //policy.AllowAnyOrigin()  // Allow any origin
         policy.WithOrigins("http://localhost:4200")
@@ -76,12 +78,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["JwtSettings:Issuer"],
-            ValidAudience = builder.Configuration["JwtSettings:Audience"],
+            ValidIssuer = jwtSettings["Issuer"],
+            ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(builder.Configuration["JwtSettings:SecretKey"])
-            //Convert.FromBase64String(jwtSettings["SecretKey"] ?? throw new InvalidOperationException("SecretKey is missing"))
-            ),
+             Encoding.UTF8.GetBytes(jwtSettings["SecretKey"])),
             //RoleClaimType = ClaimTypes.Role
 
         };
@@ -90,7 +90,7 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 // Enable CORS
-app.UseCors("AllowAngularApp");
+app.UseCors("AngularApp");
 
 if (app.Environment.IsDevelopment())
 {
