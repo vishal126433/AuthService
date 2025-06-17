@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-
 using System.Text;
 using AuthService.Data;
 using System;
@@ -58,7 +57,7 @@ builder.Services.AddCors(options =>
         //policy.AllowAnyOrigin()  // Allow any origin
         policy.WithOrigins("http://localhost:4200")
 
-
+              //.AllowAnyOrigin()
               .AllowAnyMethod()  // Allow all HTTP methods
               .AllowAnyHeader() // Allow any header
               .AllowCredentials() // <-- enable cookies/credentials
