@@ -10,6 +10,6 @@ namespace AuthService.Models
         [MaxLength(100)]
         public string PasswordHash { get; set; }
         public string Role { get; set; } = "User";
-        
+        public bool IsActive { get; internal set; }
     }
 }

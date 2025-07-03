@@ -1,94 +1,29 @@
 using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using System.Text;
 using AuthService.Data;
-using System;
-using System.Security.Claims;
-using Microsoft.OpenApi.Models;
-using System.IdentityModel.Tokens.Jwt;
-
-//Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
+using AuthService.Services.Auth;
+using AuthService.Extensions; // you create this namespace to hold your extension methods
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(options =>
-{
-    options.AddSecurityDefinition(name: JwtBearerDefaults.AuthenticationScheme,
-        securityScheme: new OpenApiSecurityScheme
-        {
-            Name = "Authorization",
-            Description = "JWT Authorization header using the Bearer scheme",
-            In = ParameterLocation.Header,
-            Type = SecuritySchemeType.ApiKey,
-            Scheme = "Bearer"
-        });
-    options.AddSecurityRequirement(new OpenApiSecurityRequirement
-                {
-                {
-                    new OpenApiSecurityScheme
-                    {
-                        Reference =new OpenApiReference
-                        {
-                            Type = ReferenceType.SecurityScheme,
-                            Id = JwtBearerDefaults.AuthenticationScheme
-                        }
-                    },
-                    new string[] {}
-                }
-                });
-}
-);
-// Add DbContext and configure the connection string for SQL Server
+
+// clean extension methods
+builder.Services.AddCustomSwagger();
+builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddAngularCors();
+
+// app services
+builder.Services.AddScoped<IAuthService, AuthService.Services.Auth.AuthService>();
+
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
 );
 
-
-
-// Add CORS policy
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AngularApp", policy =>
-    {
-        //policy.AllowAnyOrigin()  // Allow any origin
-        policy.WithOrigins("http://localhost:4200")
-
-              //.AllowAnyOrigin()
-              .AllowAnyMethod()  // Allow all HTTP methods
-              .AllowAnyHeader() // Allow any header
-              .AllowCredentials() // <-- enable cookies/credentials
-              .WithExposedHeaders("Set-Cookie", "Authorization", "Expires");
-
-    });
-});
-
-// Add authentication (JWT)
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-             Encoding.UTF8.GetBytes(jwtSettings["SecretKey"])),
-            //RoleClaimType = ClaimTypes.Role
-
-        };
-    });
 builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
-// Enable CORS
 app.UseCors("AngularApp");
 
 if (app.Environment.IsDevelopment())
@@ -99,10 +34,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
-app.UseAuthentication(); 
+app.UseAuthentication();
 app.UseAuthorization();
-
-
 app.MapControllers();
-
 app.Run();

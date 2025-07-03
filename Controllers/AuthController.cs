@@ -10,67 +10,57 @@ using System.Text;
 using Microsoft.EntityFrameworkCore;
 using AuthService.Helpers;
 using Microsoft.AspNetCore.Identity;
+using AuthService.DTOs;
+using AuthService.Services.Auth;
 
 [ApiController]
 [Route("[controller]")]
 public class AuthController : ControllerBase
 {
-    private readonly AuthDbContext _db;
-    private readonly IConfiguration _config;
+    private readonly IAuthService _authService;
 
-    public AuthController(AuthDbContext db, IConfiguration config)
+    public AuthController(IAuthService authService)
     {
-        _db = db;
-        _config = config;
+        _authService = authService;
     }
 
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
     {
-        var existingUser = await _db.Users
-            .FirstOrDefaultAsync(u => u.Username == req.Username || u.Email == req.Email);
-
-        if (existingUser != null)
-            return BadRequest("Username or Email already exists");
-
-        var user = new User
-        {
-            Username = req.Username,
-            Email = req.Email
-        };
-
-        var passwordHasher = new PasswordHasher<User>();
-        user.PasswordHash = passwordHasher.HashPassword(user, req.Password);
-
-        _db.Users.Add(user);
-        await _db.SaveChangesAsync();
-
-        return Ok("User Registered Successfully");
+        var result = await _authService.RegisterAsync(req);
+        if (result == "User Registered Successfully")
+            return Ok(result);
+        return BadRequest(result);
     }
 
+    [HttpPut("change-password")]
+    public async Task<IActionResult> ChangePassword(ChangePasswordRequest req)
+    {
+        var result = await _authService.ChangePasswordAsync(req);
+        if (result == "Password changed successfully")
+            return Ok(result);
+        return BadRequest(result);
+    }
 
     [HttpPost("login")]
     public IActionResult Login(LoginRequest req)
     {
-        var user = _db.Users.FirstOrDefault(u => u.Email == req.Email);
-        if (user == null)
-            return Unauthorized("Invalid credentials");
-
-        var passwordHasher = new PasswordHasher<User>();
-        var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
-
-        if (result == PasswordVerificationResult.Failed)
-            return Unauthorized("Invalid credentials");
-
-        var accessToken = JwtHelper.GenerateAccessToken(user, _config);
-        var refreshToken = JwtHelper.GenerateRefreshToken(user, _config);
-
-        CookieHelper.AppendRefreshToken(Response, refreshToken);
-
-        return Ok(new TokenResponse
+        try
         {
-            AccessToken = accessToken,
-        });
+            var tokenResponse = _authService.Login(req);
+            CookieHelper.AppendRefreshToken(Response, tokenResponse.RefreshToken!);
+            return Ok(new { accessToken = tokenResponse.AccessToken });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            // Return HTTP 401 + message
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            // For unexpected server errors
+            return StatusCode(500, new { message = "An unexpected error occurred." });
+        }
     }
 
 
@@ -78,46 +68,17 @@ public class AuthController : ControllerBase
     public IActionResult RefreshToken()
     {
         var refreshToken = Request.Cookies["refreshToken"];
-        if (string.IsNullOrEmpty(refreshToken))
-            return Unauthorized("No refresh token found");
-
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.UTF8.GetBytes(_config["JwtSettings:SecretKey"]);
-
-        try
-        {
-            var principal = tokenHandler.ValidateToken(refreshToken, new TokenValidationParameters
-            {
-                ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
-                ValidateIssuer = true,
-                ValidateAudience = true,
-                ValidIssuer = _config["JwtSettings:Issuer"],
-                ValidAudience = _config["JwtSettings:Audience"],
-                ValidateLifetime = true,
-                ClockSkew = TimeSpan.Zero
-            }, out SecurityToken validatedToken);
-
-            var userId = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
-                         principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-
-            var user = _db.Users.FirstOrDefault(u => u.Id.ToString() == userId);
-            if (user == null)
-                return Unauthorized("User not found");
-
-            var newAccessToken = JwtHelper.GenerateAccessToken(user, _config);
-            return Ok(new TokenResponse { AccessToken = newAccessToken });
-        }
-        catch
-        {
+        var newToken = _authService.RefreshToken(refreshToken ?? "");
+        if (newToken == null)
             return Unauthorized("Invalid or expired refresh token");
-        }
+
+        return Ok(new TokenResponse { AccessToken = newToken.AccessToken });
     }
 
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        CookieHelper.DeleteRefreshToken(Response); //  Moved to helper
+        CookieHelper.DeleteRefreshToken(Response);
         return Ok("Logged out successfully");
     }
 }
