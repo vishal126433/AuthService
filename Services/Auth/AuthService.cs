@@ -1,15 +1,14 @@
-﻿
-using AuthService.Data;
+﻿using AuthService.Data;
 using AuthService.DTOs;
 using AuthService.Helpers;
 using AuthService.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using Microsoft.IdentityModel.Tokens;
 
 namespace AuthService.Services.Auth
 {
@@ -17,99 +16,163 @@ namespace AuthService.Services.Auth
     {
         private readonly AuthDbContext _db;
         private readonly IConfiguration _config;
+        private readonly ILogger<AuthService> _logger;
 
-        public AuthService(AuthDbContext db, IConfiguration config)
+        public AuthService(AuthDbContext db, IConfiguration config, ILogger<AuthService> logger)
         {
-            _db = db;
-            _config = config;
+            _db = db ?? throw new ArgumentNullException(nameof(db), "DbContext cannot be null.");
+            _config = config ?? throw new ArgumentNullException(nameof(config), "Configuration cannot be null.");
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger), "Logger cannot be null.");
         }
 
         public async Task<string> RegisterAsync(RegisterRequest req)
         {
-            var existingUser = await _db.Users
-                .FirstOrDefaultAsync(u => u.Username == req.Username || u.Email == req.Email);
-
-            if (existingUser != null)
-                return "Username or Email already exists";
-
-            var user = new User
+            try
             {
-                Username = req.Username,
-                Email = req.Email
-            };
+                _logger.LogInformation("Registering new user with username: {Username}", req.Username);
 
-            var passwordHasher = new PasswordHasher<User>();
-            user.PasswordHash = passwordHasher.HashPassword(user, req.Password);
+                var existingUser = await _db.Users
+                    .FirstOrDefaultAsync(u => u.Username == req.Username || u.Email == req.Email);
 
-            _db.Users.Add(user);
-            await _db.SaveChangesAsync();
+                if (existingUser != null)
+                {
+                    _logger.LogWarning("Registration failed: Username or Email already exists.");
+                    return "Username or Email already exists";
+                }
 
-            return "User Registered Successfully";
+                var user = new User
+                {
+                    Username = req.Username,
+                    Email = req.Email
+                };
+
+                var passwordHasher = new PasswordHasher<User>();
+                user.PasswordHash = passwordHasher.HashPassword(user, req.Password);
+
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+
+                _logger.LogInformation("User registered successfully with Id {UserId}", user.Id);
+                return "User Registered Successfully";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred during user registration for username: {Username}", req.Username);
+                throw;
+            }
         }
 
         public async Task<string> ChangePasswordAsync(ChangePasswordRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Username) ||
-                string.IsNullOrWhiteSpace(request.OldPassword) ||
-                string.IsNullOrWhiteSpace(request.NewPassword))
-                return "Username, old password, and new password are required.";
+            try
+            {
+                _logger.LogInformation("Changing password for user: {Username}", request.Username);
 
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
-            if (user == null)
-                return "User not found";
+                if (string.IsNullOrWhiteSpace(request.Username) ||
+                    string.IsNullOrWhiteSpace(request.OldPassword) ||
+                    string.IsNullOrWhiteSpace(request.NewPassword))
+                {
+                    _logger.LogWarning("Change password failed: required fields missing.");
+                    return "Username, old password, and new password are required.";
+                }
 
-            var passwordHasher = new PasswordHasher<User>();
-            var verifyResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.OldPassword);
+                var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
+                if (user == null)
+                {
+                    _logger.LogWarning("Change password failed: user not found.");
+                    return "User not found";
+                }
 
-            if (verifyResult == PasswordVerificationResult.Failed)
-                return "Old password is incorrect";
+                var passwordHasher = new PasswordHasher<User>();
+                var verifyResult = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.OldPassword);
 
-            if (request.OldPassword == request.NewPassword)
-                return "New password cannot be the same as the old password";
+                if (verifyResult == PasswordVerificationResult.Failed)
+                {
+                    _logger.LogWarning("Change password failed: old password incorrect.");
+                    return "Old password is incorrect";
+                }
 
-            user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
-            _db.Users.Update(user);
-            await _db.SaveChangesAsync();
+                if (request.OldPassword == request.NewPassword)
+                {
+                    _logger.LogWarning("Change password failed: new password same as old.");
+                    return "New password cannot be the same as the old password";
+                }
 
-            return "Password changed successfully";
+                user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+                _db.Users.Update(user);
+                await _db.SaveChangesAsync();
+
+                _logger.LogInformation("Password changed successfully for user: {Username}", request.Username);
+                return "Password changed successfully";
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error changing password for user: {Username}", request.Username);
+                throw;
+            }
         }
 
         public TokenResponse Login(LoginRequest req)
         {
-            var user = _db.Users.FirstOrDefault(u => u.Email == req.Email);
-            if (user == null)
-                throw new UnauthorizedAccessException("Invalid email or password.");
-
-            if (!user.IsActive)
-                throw new UnauthorizedAccessException("This user is inactive. Please contact the administrator.");
-
-            var passwordHasher = new PasswordHasher<User>();
-            var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
-            if (result == PasswordVerificationResult.Failed)
-                throw new UnauthorizedAccessException("Invalid email or password.");
-
-            var accessToken = JwtHelper.GenerateAccessToken(user, _config);
-            var refreshToken = JwtHelper.GenerateRefreshToken(user, _config);
-
-            return new TokenResponse
+            try
             {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken
-            };
+                _logger.LogInformation("Attempting login for email: {Email}", req.Email);
+
+                var user = _db.Users.FirstOrDefault(u => u.Email == req.Email);
+                if (user == null)
+                {
+                    _logger.LogWarning("Login failed: invalid email.");
+                    throw new UnauthorizedAccessException("Invalid email or password.");
+                }
+
+                if (!user.IsActive)
+                {
+                    _logger.LogWarning("Login failed: user {Email} is inactive.", req.Email);
+                    throw new UnauthorizedAccessException("This user is inactive. Please contact the administrator.");
+                }
+
+                var passwordHasher = new PasswordHasher<User>();
+                var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
+
+                if (result == PasswordVerificationResult.Failed)
+                {
+                    _logger.LogWarning("Login failed: invalid password for email: {Email}", req.Email);
+                    throw new UnauthorizedAccessException("Invalid email or password.");
+                }
+
+                var accessToken = JwtHelper.GenerateAccessToken(user, _config);
+                var refreshToken = JwtHelper.GenerateRefreshToken(user, _config);
+
+                _logger.LogInformation("User logged in successfully: {Email}", req.Email);
+
+                return new TokenResponse
+                {
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken
+                };
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error during login for email: {Email}", req.Email);
+                throw;
+            }
         }
-
-
-
 
         public TokenResponse? RefreshToken(string refreshToken)
         {
-            if (string.IsNullOrEmpty(refreshToken)) return null;
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var key = Encoding.UTF8.GetBytes(_config["JwtSettings:SecretKey"]);
-
             try
             {
+                _logger.LogInformation("Refreshing access token.");
+
+                if (string.IsNullOrEmpty(refreshToken))
+                {
+                    _logger.LogWarning("Refresh token failed: token is null or empty.");
+                    return null;
+                }
+
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var key = Encoding.UTF8.GetBytes(_config["JwtSettings:SecretKey"]);
+
                 var principal = tokenHandler.ValidateToken(refreshToken, new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
@@ -126,14 +189,22 @@ namespace AuthService.Services.Auth
                              principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
                 var user = _db.Users.FirstOrDefault(u => u.Id.ToString() == userId);
-                if (user == null) return null;
+                if (user == null)
+                {
+                    _logger.LogWarning("Refresh token failed: user not found.");
+                    return null;
+                }
 
                 var newAccessToken = JwtHelper.GenerateAccessToken(user, _config);
+
+                _logger.LogInformation("Access token refreshed successfully for user Id: {UserId}", user.Id);
+
                 return new TokenResponse { AccessToken = newAccessToken };
             }
-            catch
+            catch (Exception ex)
             {
-                return null;
+                _logger.LogError(ex, "Error refreshing token.");
+                throw;
             }
         }
     }

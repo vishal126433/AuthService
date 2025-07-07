@@ -64,13 +64,17 @@ namespace AuthService.Extensions
             return services;
         }
 
-        public static IServiceCollection AddAngularCors(this IServiceCollection services)
+        public static IServiceCollection AddAngularCors(this IServiceCollection services, IConfiguration configuration)
         {
+            var corsSection = configuration.GetSection("Cors");
+            var policyName = corsSection.GetValue<string>("PolicyName");
+            var allowedOrigins = corsSection.GetSection("AllowedOrigins").Get<string[]>();
+
             services.AddCors(options =>
             {
-                options.AddPolicy("AngularApp", policy =>
+                options.AddPolicy(policyName, policy =>
                 {
-                    policy.WithOrigins("http://localhost:4200")
+                    policy.WithOrigins(allowedOrigins)
                           .AllowAnyMethod()
                           .AllowAnyHeader()
                           .AllowCredentials()
