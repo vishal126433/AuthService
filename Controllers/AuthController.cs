@@ -1,84 +1,103 @@
-﻿using AuthService.Models;
-using Microsoft.AspNetCore.Mvc;
-using AuthService.Data;
-using Microsoft.AspNetCore.Identity.Data;
-using System;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
-using Microsoft.EntityFrameworkCore;
-using AuthService.Helpers;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using AuthService.DTOs;
-using AuthService.Services.Auth;
+//using AuthService.Services.Auth;
+using AuthService.Services;
+using AuthService.Interfaces;
+using AuthService.Helpers;
+//using TaskManager.Helpers;
 
-[ApiController]
-[Route("[controller]")]
-public class AuthController : ControllerBase
+namespace AuthService.Controllers
 {
-    private readonly IAuthService _authService;
-
-    public AuthController(IAuthService authService)
+    [ApiController]
+    [Route("[controller]")]
+    public class AuthController : ControllerBase
     {
-        _authService = authService;
-    }
+        private readonly IAuthService _authService;
 
-    [HttpPost("register")]
-    public async Task<IActionResult> Register(RegisterRequest req)
-    {
-        var result = await _authService.RegisterAsync(req);
-        if (result == "User Registered Successfully")
-            return Ok(result);
-        return BadRequest(result);
-    }
-
-    [HttpPut("change-password")]
-    public async Task<IActionResult> ChangePassword(ChangePasswordRequest req)
-    {
-        var result = await _authService.ChangePasswordAsync(req);
-        if (result == "Password changed successfully")
-            return Ok(result);
-        return BadRequest(result);
-    }
-
-    [HttpPost("login")]
-    public IActionResult Login(LoginRequest req)
-    {
-        try
+        public AuthController(IAuthService authService)
         {
-            var tokenResponse = _authService.Login(req);
-            CookieHelper.AppendRefreshToken(Response, tokenResponse.RefreshToken!);
-            return Ok(new { accessToken = tokenResponse.AccessToken });
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         }
-        catch (UnauthorizedAccessException ex)
+
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest req)
         {
-            // Return HTTP 401 + message
-            return Unauthorized(new { message = ex.Message });
+            try
+            {
+                var result = await _authService.RegisterAsync(req);
+                return Ok(ApiResponse<string>.SuccessResponse(result, 200, ResponseMessages.Auth.Registered));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<string>.SingleError(ex.Message));
+            }
         }
-        catch (Exception ex)
+
+        [HttpPut("change-password")]
+        public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest req)
         {
-            // For unexpected server errors
-            return StatusCode(500, new { message = "An unexpected error occurred." });
+            try
+            {
+                var result = await _authService.ChangePasswordAsync(req);
+                return Ok(ApiResponse<string>.SuccessResponse(result, 200, ResponseMessages.Auth.PasswordChanged));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<string>.SingleError(ex.Message));
+            }
         }
-    }
+
+        [HttpPost("login")]
+        public IActionResult Login([FromBody] LoginRequest req)
+        {
+            try
+            {
+                var tokenResponse = _authService.Login(req);
+                CookieHelper.AppendRefreshToken(Response, tokenResponse.RefreshToken!);
+
+                return Ok(ApiResponse<object>.SuccessResponse(new
+                {
+                    accessToken = tokenResponse.AccessToken
+                }, 200, ResponseMessages.Auth.LoggedIn));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                return Unauthorized(ApiResponse<string>.SingleError(ex.Message));
+            }
+            catch (Exception)
+            {
+                return StatusCode(500, ApiResponse<string>.SingleError(ResponseMessages.Common.ServerError));
+            }
+        }
 
 
-    [HttpPost("refresh-token")]
-    public IActionResult RefreshToken()
-    {
-        var refreshToken = Request.Cookies["refreshToken"];
-        var newToken = _authService.RefreshToken(refreshToken ?? "");
-        if (newToken == null)
-            return Unauthorized("Invalid or expired refresh token");
 
-        return Ok(new TokenResponse { AccessToken = newToken.AccessToken });
-    }
 
-    [HttpPost("logout")]
-    public IActionResult Logout()
-    {
-        CookieHelper.DeleteRefreshToken(Response);
-        return Ok("Logged out successfully");
+
+        
+
+
+        [HttpPost("refresh-token")]
+        public IActionResult RefreshToken()
+        {
+            var refreshToken = Request.Cookies["refreshToken"];
+            var newToken = _authService.RefreshToken(refreshToken ?? "");
+            if (newToken == null)
+                return Unauthorized("Invalid or expired refresh token");
+
+            return Ok(new TokenResponse { AccessToken = newToken.AccessToken });
+        }
+
+
+
+
+
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            CookieHelper.DeleteRefreshToken(Response);
+            return Ok(ApiResponse<string>.SuccessResponse(null, 200, ResponseMessages.Auth.LoggedOut));
+        }
     }
 }

@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using AuthService.Data;
-using AuthService.Services.Auth;
+//using AuthService.Services.Auth;
+using AuthService.Services;
+using AuthService.Interfaces;
 using AuthService.Extensions; // you create this namespace to hold your extension methods
 using AuthService.Middlewares;
 using Serilog.Events;
@@ -25,7 +27,9 @@ builder.Services.AddJwtAuthentication(builder.Configuration);
 builder.Services.AddAngularCors(builder.Configuration);
 
 // app services
-builder.Services.AddScoped<IAuthService, AuthService.Services.Auth.AuthService>();
+builder.Services.AddScoped<IAuthService, AuthService.Services.AuthService>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+
 
 builder.Services.AddDbContext<AuthDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))
