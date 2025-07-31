@@ -10,6 +10,8 @@
             public const string LoggedOut = "User logged out successfully.";
             public const string InvalidRefreshToken = "Invalid or expired refresh token.";
             public const string TokenRefreshed = "Token refreshed successfully.";
+            public const string EmailPasswordRequired = "Email and password are required.";
+
         }
 
         public static class Common

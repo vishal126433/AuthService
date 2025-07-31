@@ -27,10 +27,6 @@ namespace AuthService.Middlewares
                 context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
                 context.Response.ContentType = "application/json";
 
-                //var response = new
-                //{
-                //    message = "An unexpected error occurred. Please try again later."
-                //};
                 var response = new
                 {
                     message = ex.Message,

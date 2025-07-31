@@ -1,15 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using AuthService.Data;
-//using AuthService.Services.Auth;
 using AuthService.Services;
 using AuthService.Interfaces;
-using AuthService.Extensions; // you create this namespace to hold your extension methods
+using AuthService.Extensions; 
 using AuthService.Middlewares;
 using Serilog.Events;
 using Serilog;
 
 Log.Logger = new LoggerConfiguration()
-    .MinimumLevel.Information() // overall level
+    .MinimumLevel.Information() 
     .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
     .MinimumLevel.Override("Microsoft.EntityFrameworkCore", LogEventLevel.Warning)
     .Enrich.FromLogContext()

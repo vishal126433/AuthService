@@ -1,11 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Identity;
 using AuthService.DTOs;
-//using AuthService.Services.Auth;
 using AuthService.Services;
 using AuthService.Interfaces;
 using AuthService.Helpers;
-//using TaskManager.Helpers;
 
 namespace AuthService.Controllers
 {
@@ -51,6 +49,12 @@ namespace AuthService.Controllers
         [HttpPost("login")]
         public IActionResult Login([FromBody] LoginRequest req)
         {
+            if (req == null || string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
+            {
+                return BadRequest(ApiResponse<string>.SingleError(
+                    ResponseMessages.Auth.EmailPasswordRequired));
+            }
+
             try
             {
                 var tokenResponse = _authService.Login(req);
@@ -71,13 +75,6 @@ namespace AuthService.Controllers
             }
         }
 
-
-
-
-
-        
-
-
         [HttpPost("refresh-token")]
         public IActionResult RefreshToken()
         {
@@ -88,10 +85,6 @@ namespace AuthService.Controllers
 
             return Ok(new TokenResponse { AccessToken = newToken.AccessToken });
         }
-
-
-
-
 
         [HttpPost("logout")]
         public IActionResult Logout()
