@@ -9,6 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using AuthService.Helpers;
 
 namespace AuthService.Services
 {
@@ -23,9 +24,9 @@ namespace AuthService.Services
         public AuthService(AuthDbContext db, IConfiguration config, ILogger<AuthService> logger, ITokenService tokenService)
 
         {
-            _db = db ?? throw new ArgumentNullException(nameof(db), "DbContext cannot be null.");
-            _config = config ?? throw new ArgumentNullException(nameof(config), "Configuration cannot be null.");
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger), "Logger cannot be null.");
+            _db = db ?? throw new ArgumentNullException(nameof(db), ResponseMessages.Auth.DBContextNull);
+            _config = config ?? throw new ArgumentNullException(nameof(config),ResponseMessages.Auth.ConfigurationNull);
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger), ResponseMessages.Auth.LoggerNull);
             _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
 
         }
@@ -40,7 +41,7 @@ namespace AuthService.Services
             if (existingUser != null)
             {
                 _logger.LogWarning("Registration failed: Username or Email already exists.");
-                return "Username or Email already exists";
+                return ResponseMessages.Auth.UserNameEmailExist;
             }
 
             var user = new User
@@ -56,7 +57,7 @@ namespace AuthService.Services
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("User registered successfully with Id {UserId}", user.Id);
-            return "User Registered Successfully";
+            return ResponseMessages.Auth.Registered;
         }
 
         public async Task<string> ChangePasswordAsync(ChangePasswordRequest request)
@@ -68,14 +69,14 @@ namespace AuthService.Services
                 string.IsNullOrWhiteSpace(request.NewPassword))
             {
                 _logger.LogWarning("Change password failed: required fields missing.");
-                return "Username, old password, and new password are required.";
+                return ResponseMessages.Auth.Required;
             }
 
             var user = await _db.Users.FirstOrDefaultAsync(u => u.Username == request.Username);
             if (user == null)
             {
                 _logger.LogWarning("Change password failed: user not found.");
-                return "User not found";
+                return ResponseMessages.Auth.NoUser;
             }
 
             var passwordHasher = new PasswordHasher<User>();
@@ -84,13 +85,13 @@ namespace AuthService.Services
             if (verifyResult == PasswordVerificationResult.Failed)
             {
                 _logger.LogWarning("Change password failed: old password incorrect.");
-                return "Old password is incorrect";
+                return ResponseMessages.Auth.PasswordIncorrect;
             }
 
             if (request.OldPassword == request.NewPassword)
             {
                 _logger.LogWarning("Change password failed: new password same as old.");
-                return "New password cannot be the same as the old password";
+                return ResponseMessages.Auth.NoNewAndOld;
             }
 
             user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
@@ -98,7 +99,7 @@ namespace AuthService.Services
             await _db.SaveChangesAsync();
 
             _logger.LogInformation("Password changed successfully for user: {Username}", request.Username);
-            return "Password changed successfully";
+            return ResponseMessages.Auth.PasswordChanged;
         }
 
         public TokenResponse Login(LoginRequest req)
@@ -109,13 +110,13 @@ namespace AuthService.Services
             if (user == null)
             {
                 _logger.LogWarning("Login failed: invalid email.");
-                throw new UnauthorizedAccessException("Invalid email or password.");
+                throw new UnauthorizedAccessException(ResponseMessages.Auth.InvalidEmailPassword);
             }
 
             if (!user.IsActive)
             {
                 _logger.LogWarning("Login failed: user {Email} is inactive.", req.Email);
-                throw new UnauthorizedAccessException("This user is inactive. Please contact the administrator.");
+                throw new UnauthorizedAccessException(ResponseMessages.Auth.UserInactive);
             }
 
             var passwordHasher = new PasswordHasher<User>();
@@ -124,7 +125,7 @@ namespace AuthService.Services
             if (result == PasswordVerificationResult.Failed)
             {
                 _logger.LogWarning("Login failed: invalid password for email: {Email}", req.Email);
-                throw new UnauthorizedAccessException("Invalid email or password.");
+                throw new UnauthorizedAccessException(ResponseMessages.Auth.InvalidEmailPassword);
             }
 
             var accessToken = _tokenService.GenerateAccessToken(user);
